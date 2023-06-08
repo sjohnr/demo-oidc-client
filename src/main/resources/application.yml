@@ -1,16 +1,4 @@
 spring:
-  security:
-    oauth2:
-      client:
-        registration:
-          oidc-client:
-            provider: spring
-            client-id: oidc-client
-            client-secret: secret
-            authorization-grant-type: authorization_code
-            client-authentication-method: client_secret_basic
-            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
-            scope: openid,user.read
-        provider:
-          spring:
-            issuer-uri: http://localhost:9000
+  jpa:
+    hibernate:
+      ddl-auto: none

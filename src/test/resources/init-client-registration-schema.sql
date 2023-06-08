@@ -1,0 +1,2 @@
+insert into client_registration (client_registration_id, client_id, client_secret, client_authentication_method, authorization_grant_type, redirect_uri, scopes, authorization_uri, token_uri, user_info_uri, user_info_authentication_method, user_info_user_name_attribute_name, jwk_set_uri, issuer_uri)
+  values ('oidc-client', 'oidc-client', 'secret', 'client_secret_basic', 'authorization_code', '{baseUrl}/login/oauth2/code/{registrationId}', 'openid,user.read', '/oauth2/authorize', '/oauth2/token', '/userinfo', 'header', 'sub', '/oauth2/jwks', 'http://localhost:9000');
