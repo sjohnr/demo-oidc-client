@@ -29,19 +29,10 @@ import org.springframework.security.oauth2.client.JwtBearerOAuth2AuthorizedClien
 import org.springframework.security.oauth2.client.OAuth2AuthorizationContext;
 import org.springframework.security.oauth2.client.OAuth2AuthorizeRequest;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
-import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManagerBuilder;
-import org.springframework.security.oauth2.client.OAuth2AuthorizedClientProviderBuilder;
 import org.springframework.security.oauth2.client.endpoint.DefaultAuthorizationCodeTokenResponseClient;
-import org.springframework.security.oauth2.client.endpoint.DefaultClientCredentialsTokenResponseClient;
-import org.springframework.security.oauth2.client.endpoint.DefaultJwtBearerTokenResponseClient;
-import org.springframework.security.oauth2.client.endpoint.DefaultPasswordTokenResponseClient;
-import org.springframework.security.oauth2.client.endpoint.DefaultRefreshTokenTokenResponseClient;
-import org.springframework.security.oauth2.client.endpoint.JwtBearerGrantRequestEntityConverter;
 import org.springframework.security.oauth2.client.endpoint.NimbusJwtClientAuthenticationParametersConverter;
-import org.springframework.security.oauth2.client.endpoint.OAuth2AuthorizationCodeGrantRequestEntityConverter;
-import org.springframework.security.oauth2.client.endpoint.OAuth2ClientCredentialsGrantRequestEntityConverter;
-import org.springframework.security.oauth2.client.endpoint.OAuth2PasswordGrantRequestEntityConverter;
-import org.springframework.security.oauth2.client.endpoint.OAuth2RefreshTokenGrantRequestEntityConverter;
+import org.springframework.security.oauth2.client.endpoint.OAuth2AccessTokenResponseClient;
+import org.springframework.security.oauth2.client.endpoint.OAuth2AuthorizationCodeGrantRequest;
 import org.springframework.security.oauth2.client.registration.ClientRegistration;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
@@ -49,6 +40,8 @@ import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequest
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
 import org.springframework.security.oauth2.client.web.reactive.function.client.ServletOAuth2AuthorizedClientExchangeFilterFunction;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
+import org.springframework.security.oauth2.core.endpoint.DefaultMapOAuth2AccessTokenResponseConverter;
+import org.springframework.security.oauth2.core.endpoint.OAuth2AccessTokenResponse;
 import org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames;
 import org.springframework.security.oauth2.core.http.converter.OAuth2AccessTokenResponseHttpMessageConverter;
 import org.springframework.security.web.SecurityFilterChain;
@@ -66,7 +59,7 @@ public class DemoOidcClientApplication {
 	}
 
 	@Bean
-	@Profile("default")
+	@Profile({ "default", "authorization_code", "client_credentials", "private_key_jwt", "jwt_bearer", "password" })
 	public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http) throws Exception {
 		// @formatter:off
 		http
@@ -81,37 +74,28 @@ public class DemoOidcClientApplication {
 	}
 
 	@Bean
-	@Profile("kitchen_sink")
-	public SecurityFilterChain securityFilterChain(HttpSecurity http,
-			ClientRegistrationRepository clientRegistrationRepository,
+	@Profile("rest")
+	public SecurityFilterChain restSecurityFilterChain(HttpSecurity http,
 			RestTemplate restTemplate) throws Exception {
 
 		// @formatter:off
-		DefaultOAuth2AuthorizationRequestResolver authorizationRequestResolver =
-				new DefaultOAuth2AuthorizationRequestResolver(
-						clientRegistrationRepository, "/oauth2/authorize");
-		authorizationRequestResolver.setAuthorizationRequestCustomizer(
-				OAuth2AuthorizationRequestCustomizers.withPkce());
+		OAuth2AccessTokenResponseClient<OAuth2AuthorizationCodeGrantRequest> accessTokenResponseClient =
+			DefaultAuthorizationCodeTokenResponseClient.builder()
+				.restOperations(restTemplate)
+				.build();
 
 		http
 			.authorizeHttpRequests((authorize) -> authorize
 				.anyRequest().authenticated()
 			)
 			.oauth2Login((oauth2Login) -> oauth2Login
-				.authorizationEndpoint((authorizationEndpoint) -> authorizationEndpoint
-					.authorizationRequestResolver(authorizationRequestResolver)
+				.tokenEndpoint((tokenEndpoint) -> tokenEndpoint
+					.accessTokenResponseClient(accessTokenResponseClient)
 				)
 			)
 			.oauth2Client((oauth2Client) -> oauth2Client
 				.authorizationCodeGrant((authorizationCode) -> authorizationCode
-					.accessTokenResponseClient(DefaultAuthorizationCodeTokenResponseClient.builder()
-							.requestEntityConverter(OAuth2AuthorizationCodeGrantRequestEntityConverter.builder()
-								.addParametersConverter(new NimbusJwtClientAuthenticationParametersConverter<>(jwkResolver()))
-								.build()
-							)
-							.restOperations(restTemplate)
-							.build()
-					)
+					.accessTokenResponseClient(accessTokenResponseClient)
 				)
 			);
 		// @formatter:on
@@ -121,82 +105,80 @@ public class DemoOidcClientApplication {
 
 	@Bean
 	@Profile("default")
-	public OAuth2AuthorizedClientManagerBuilder authorizedClientManagerBuilder(
+	public OAuth2AuthorizedClientManager authorizedClientManager(
 			ClientRegistrationRepository clientRegistrationRepository,
 			OAuth2AuthorizedClientRepository authorizedClientRepository) {
 
-		return OAuth2AuthorizedClientManagerBuilder.builder(clientRegistrationRepository, authorizedClientRepository);
+		return OAuth2AuthorizedClientManager.builder(clientRegistrationRepository, authorizedClientRepository).build();
 	}
 
 	@Bean
 	@Profile("rest")
-	public OAuth2AuthorizedClientManagerBuilder restOperationsAuthorizedClientManagerBuilder(
+	public OAuth2AuthorizedClientManager restOperationsAuthorizedClientManager(
 			ClientRegistrationRepository clientRegistrationRepository,
 			OAuth2AuthorizedClientRepository authorizedClientRepository,
 			RestTemplate restTemplate) {
 
-		return OAuth2AuthorizedClientManagerBuilder.builder(clientRegistrationRepository, authorizedClientRepository)
-				.restOperations(restTemplate);
+		return OAuth2AuthorizedClientManager.builder(clientRegistrationRepository, authorizedClientRepository)
+				.restOperations(restTemplate)
+				.build();
 	}
 
 	@Bean
 	@Profile("authorization_code")
-	public OAuth2AuthorizedClientManagerBuilder authorizationCodeAuthorizedClientManagerBuilder(
+	public OAuth2AuthorizedClientManager authorizationCodeAuthorizedClientManager(
 			ClientRegistrationRepository clientRegistrationRepository,
 			OAuth2AuthorizedClientRepository authorizedClientRepository) {
 
 		// @formatter:off
-		return OAuth2AuthorizedClientManagerBuilder.builder(clientRegistrationRepository, authorizedClientRepository)
-				.providers(OAuth2AuthorizedClientProviderBuilder.builder()
+		return OAuth2AuthorizedClientManager.builder(clientRegistrationRepository, authorizedClientRepository)
+				.providers((providers) -> providers
 						.authorizationCode()
 						.refreshToken()
-				);
+				)
+				.build();
 		// @formatter:on
 	}
 
 	@Bean
 	@Profile("client_credentials")
-	public OAuth2AuthorizedClientManagerBuilder clientCredentialsAuthorizedClientManagerBuilder(
+	public OAuth2AuthorizedClientManager clientCredentialsAuthorizedClientManager(
 			ClientRegistrationRepository clientRegistrationRepository,
 			OAuth2AuthorizedClientRepository authorizedClientRepository) {
 
 		// @formatter:off
-		return OAuth2AuthorizedClientManagerBuilder.builder(clientRegistrationRepository, authorizedClientRepository)
-				.providers(OAuth2AuthorizedClientProviderBuilder.builder()
+		return OAuth2AuthorizedClientManager.builder(clientRegistrationRepository, authorizedClientRepository)
+				.providers((providers) -> providers
 						.clientCredentials((clientCredentials) -> clientCredentials
-								.accessTokenResponseClient(DefaultClientCredentialsTokenResponseClient.builder()
-										.requestEntityConverter(OAuth2ClientCredentialsGrantRequestEntityConverter.builder()
+								.accessTokenResponseClient((client) -> client
+										.requestEntityConverter((converter) -> converter
 												.defaultParameters((parameters) -> parameters.set("audience", "xyz_value"))
-												.build()
 										)
-										.build()
 								)
-								.build()
 						)
-				);
+				)
+				.build();
 		// @formatter:on
 	}
 
 	@Bean
 	@Profile("private_key_jwt")
-	public OAuth2AuthorizedClientManagerBuilder jwtClientAuthenticationAuthorizedClientManagerBuilder(
+	public OAuth2AuthorizedClientManager jwtClientAuthenticationAuthorizedClientManager(
 			ClientRegistrationRepository clientRegistrationRepository,
 			OAuth2AuthorizedClientRepository authorizedClientRepository) {
 
 		// @formatter:off
-		return OAuth2AuthorizedClientManagerBuilder.builder(clientRegistrationRepository, authorizedClientRepository)
-				.providers(OAuth2AuthorizedClientProviderBuilder.builder()
+		return OAuth2AuthorizedClientManager.builder(clientRegistrationRepository, authorizedClientRepository)
+				.providers((providers) -> providers
 						.clientCredentials((clientCredentials) -> clientCredentials
-								.accessTokenResponseClient(DefaultClientCredentialsTokenResponseClient.builder()
-										.requestEntityConverter(OAuth2ClientCredentialsGrantRequestEntityConverter.builder()
+								.accessTokenResponseClient((client) -> client
+										.requestEntityConverter((converter) -> converter
 												.addParametersConverter(new NimbusJwtClientAuthenticationParametersConverter<>(jwkResolver()))
-												.build()
 										)
-										.build()
 								)
-								.build()
 						)
-				);
+				)
+				.build();
 		// @formatter:on
 	}
 
@@ -232,34 +214,35 @@ public class DemoOidcClientApplication {
 
 	@Bean
 	@Profile("jwt_bearer")
-	public OAuth2AuthorizedClientManagerBuilder jwtAuthorizedClientManagerBuilder(
+	public OAuth2AuthorizedClientManager jwtAuthorizedClientManager(
 			ClientRegistrationRepository clientRegistrationRepository,
 			OAuth2AuthorizedClientRepository authorizedClientRepository,
 			RestTemplate restTemplate) {
 
 		// @formatter:off
-		return OAuth2AuthorizedClientManagerBuilder.builder(clientRegistrationRepository, authorizedClientRepository)
+		return OAuth2AuthorizedClientManager.builder(clientRegistrationRepository, authorizedClientRepository)
 				.restOperations(restTemplate)
-				.providers(OAuth2AuthorizedClientProviderBuilder.builder()
+				.providers((providers) -> providers
 						.provider(JwtBearerOAuth2AuthorizedClientProvider.builder()
-								.accessTokenResponseClient(DefaultJwtBearerTokenResponseClient.builder()
+								.accessTokenResponseClient((client) -> client
 										.restOperations(restTemplate)
-										.build()
 								)
 								.build()
 						)
-				);
+				)
+				.build();
 		// @formatter:on
 	}
 
 	@Bean
 	@Profile("password")
-	public OAuth2AuthorizedClientManagerBuilder passwordAuthorizedClientManagerBuilder(
+	public OAuth2AuthorizedClientManager passwordAuthorizedClientManager(
 			ClientRegistrationRepository clientRegistrationRepository,
 			OAuth2AuthorizedClientRepository authorizedClientRepository) {
 
-		return OAuth2AuthorizedClientManagerBuilder.builder(clientRegistrationRepository, authorizedClientRepository)
-				.contextAttributesMapper(contextAttributesMapper());
+		return OAuth2AuthorizedClientManager.builder(clientRegistrationRepository, authorizedClientRepository)
+				.contextAttributesMapper(contextAttributesMapper())
+				.build();
 	}
 
 	/**
@@ -285,18 +268,61 @@ public class DemoOidcClientApplication {
 
 	@Bean
 	@Profile("kitchen_sink")
-	public OAuth2AuthorizedClientManagerBuilder kitchenSinkAuthorizedClientManagerBuilder(
+	public SecurityFilterChain securityFilterChain(HttpSecurity http,
+			ClientRegistrationRepository clientRegistrationRepository,
+			RestTemplate restTemplate) throws Exception {
+
+		// @formatter:off
+		DefaultOAuth2AuthorizationRequestResolver authorizationRequestResolver =
+				new DefaultOAuth2AuthorizationRequestResolver(
+						clientRegistrationRepository, "/oauth2/authorize");
+		authorizationRequestResolver.setAuthorizationRequestCustomizer(
+				OAuth2AuthorizationRequestCustomizers.withPkce());
+
+		OAuth2AccessTokenResponseClient<OAuth2AuthorizationCodeGrantRequest> accessTokenResponseClient =
+			DefaultAuthorizationCodeTokenResponseClient.builder()
+				.requestEntityConverter((converter) -> converter
+					.addParametersConverter(new NimbusJwtClientAuthenticationParametersConverter<>(jwkResolver()))
+				)
+				.restOperations(restTemplate)
+				.build();
+
+		http
+			.authorizeHttpRequests((authorize) -> authorize
+				.anyRequest().authenticated()
+			)
+			.oauth2Login((oauth2Login) -> oauth2Login
+				.authorizationEndpoint((authorizationEndpoint) -> authorizationEndpoint
+					.authorizationRequestResolver(authorizationRequestResolver)
+				)
+				.tokenEndpoint((tokenEndpoint) -> tokenEndpoint
+					.accessTokenResponseClient(accessTokenResponseClient)
+				)
+			)
+			.oauth2Client((oauth2Client) -> oauth2Client
+				.authorizationCodeGrant((authorizationCode) -> authorizationCode
+					.accessTokenResponseClient(accessTokenResponseClient)
+				)
+			);
+		// @formatter:on
+
+		return http.build();
+	}
+
+	@Bean
+	@Profile("kitchen_sink")
+	public OAuth2AuthorizedClientManager kitchenSinkAuthorizedClientManager(
 			ClientRegistrationRepository clientRegistrationRepository,
 			OAuth2AuthorizedClientRepository authorizedClientRepository,
 			RestTemplate restTemplate) {
 
 		// @formatter:off
-		return OAuth2AuthorizedClientManagerBuilder.builder(clientRegistrationRepository, authorizedClientRepository)
-				.providers(OAuth2AuthorizedClientProviderBuilder.builder()
+		return OAuth2AuthorizedClientManager.builder(clientRegistrationRepository, authorizedClientRepository)
+				.providers((providers) -> providers
 						.authorizationCode()
 						.refreshToken((refreshToken) -> refreshToken
-								.accessTokenResponseClient(DefaultRefreshTokenTokenResponseClient.builder()
-										.requestEntityConverter(OAuth2RefreshTokenGrantRequestEntityConverter.builder()
+								.accessTokenResponseClient((client) -> client
+										.requestEntityConverter((converter) -> converter
 												.headersConverter((request) -> new HttpHeaders()/* ... */)
 												.defaultHeaders((headers) -> headers.setAccept(List.of(MediaType.APPLICATION_JSON)))
 												.addHeadersConverter((request) -> new HttpHeaders()/* ... */)
@@ -313,26 +339,8 @@ public class DemoOidcClientApplication {
 								.build()
 						)
 						.clientCredentials((clientCredentials) -> clientCredentials
-								.accessTokenResponseClient(DefaultClientCredentialsTokenResponseClient.builder()
-										.requestEntityConverter(OAuth2ClientCredentialsGrantRequestEntityConverter.builder()
-												.headersConverter((request) -> new HttpHeaders()/* ... */)
-												.defaultHeaders((headers) -> headers.setAccept(List.of(MediaType.APPLICATION_JSON)))
-												.addHeadersConverter((request) -> new HttpHeaders()/* ... */)
-												.parametersConverter((request) -> new LinkedMultiValueMap<>()/* ... */)
-												.defaultParameters((parameters) -> parameters.set("audience", "xyz_value"))
-												.addParametersConverter(new NimbusJwtClientAuthenticationParametersConverter<>(jwkResolver()))
-												.build()
-										)
-										.restOperations(restTemplate)
-										.build()
-								)
-								.clock(Clock.systemUTC())
-								.clockSkew(Duration.ofMinutes(1))
-								.build()
-						)
-						.password((password) -> password
-								.accessTokenResponseClient(DefaultPasswordTokenResponseClient.builder()
-										.requestEntityConverter(OAuth2PasswordGrantRequestEntityConverter.builder()
+								.accessTokenResponseClient((client) -> client
+										.requestEntityConverter((converter) -> converter
 												.headersConverter((request) -> new HttpHeaders()/* ... */)
 												.defaultHeaders((headers) -> headers.setAccept(List.of(MediaType.APPLICATION_JSON)))
 												.addHeadersConverter((request) -> new HttpHeaders()/* ... */)
@@ -349,8 +357,8 @@ public class DemoOidcClientApplication {
 								.build()
 						)
 						.provider(JwtBearerOAuth2AuthorizedClientProvider.builder()
-								.accessTokenResponseClient(DefaultJwtBearerTokenResponseClient.builder()
-										.requestEntityConverter(JwtBearerGrantRequestEntityConverter.builder()
+								.accessTokenResponseClient((client) -> client
+										.requestEntityConverter((converter) -> converter
 												.headersConverter((request) -> new HttpHeaders()/* ... */)
 												.defaultHeaders((headers) -> headers.setAccept(List.of(MediaType.APPLICATION_JSON)))
 												.addHeadersConverter((request) -> new HttpHeaders()/* ... */)
@@ -369,16 +377,30 @@ public class DemoOidcClientApplication {
 				)
 				.contextAttributesMapper(contextAttributesMapper())
 				.authorizationSuccessHandler((client, principal, attributes) -> {/* ... */})
-				.authorizationFailureHandler((exception, principal, attributes) -> {/* ... */});
+				.authorizationFailureHandler((exception, principal, attributes) -> {/* ... */})
+				.build();
 		// @formatter:on
 	}
 
 	@Bean
 	public RestTemplate restTemplate() {
+		var accessTokenResponseMessageConverter = new OAuth2AccessTokenResponseHttpMessageConverter();
+		var accessTokenResponseConverterDelegate = new DefaultMapOAuth2AccessTokenResponseConverter();
+		accessTokenResponseMessageConverter.setAccessTokenResponseConverter((map) -> {
+			var accessTokenResponse = accessTokenResponseConverterDelegate.convert(map);
+			if (map.containsKey("scp")) {
+				System.out.println("Handling custom scp parameter...");
+				return OAuth2AccessTokenResponse.withResponse(accessTokenResponse)
+						.scopes(StringUtils.commaDelimitedListToSet(map.get("scp").toString()))
+						.build();
+			}
+			return accessTokenResponse;
+		});
+
 		// @formatter:off
 		var restTemplate = new RestTemplate(List.of(
 				new FormHttpMessageConverter(),
-				new OAuth2AccessTokenResponseHttpMessageConverter()));
+				accessTokenResponseMessageConverter));
 		// @formatter:on
 		// ...
 

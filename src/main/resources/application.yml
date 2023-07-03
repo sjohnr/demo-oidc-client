@@ -6,7 +6,7 @@ spring:
     oauth2:
       client:
         registration:
-          oidc-client:
+          spring:
             provider: spring
             client-id: oidc-client
             client-secret: secret
