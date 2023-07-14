@@ -364,10 +364,14 @@ public class DemoOidcClientApplication {
 
 	@Bean
 	public RestTemplate restTemplate() {
-		var accessTokenResponseMessageConverter = new OAuth2AccessTokenResponseHttpMessageConverter();
-		var accessTokenResponseConverterDelegate = new DefaultMapOAuth2AccessTokenResponseConverter();
+		OAuth2AccessTokenResponseHttpMessageConverter accessTokenResponseMessageConverter =
+				new OAuth2AccessTokenResponseHttpMessageConverter();
+
+		DefaultMapOAuth2AccessTokenResponseConverter accessTokenResponseConverterDelegate =
+				new DefaultMapOAuth2AccessTokenResponseConverter();
+
 		accessTokenResponseMessageConverter.setAccessTokenResponseConverter((map) -> {
-			var accessTokenResponse = accessTokenResponseConverterDelegate.convert(map);
+			OAuth2AccessTokenResponse accessTokenResponse = accessTokenResponseConverterDelegate.convert(map);
 			if (map.containsKey("scp")) {
 				System.out.println("Handling custom scp parameter...");
 				return OAuth2AccessTokenResponse.withResponse(accessTokenResponse)
@@ -378,7 +382,7 @@ public class DemoOidcClientApplication {
 		});
 
 		// @formatter:off
-		var restTemplate = new RestTemplate(List.of(
+		RestTemplate restTemplate = new RestTemplate(List.of(
 				new FormHttpMessageConverter(),
 				accessTokenResponseMessageConverter));
 		// @formatter:on
