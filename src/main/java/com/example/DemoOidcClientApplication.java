@@ -132,10 +132,8 @@ public class DemoOidcClientApplication {
 
 		// @formatter:off
 		return OAuth2AuthorizedClientManager.builder(clientRegistrationRepository, authorizedClientRepository)
-				.providers((providers) -> providers
-						.authorizationCode()
-						.refreshToken()
-				)
+				.authorizationCodeGrant()
+				.refreshTokenGrant()
 				.build();
 		// @formatter:on
 	}
@@ -148,12 +146,10 @@ public class DemoOidcClientApplication {
 
 		// @formatter:off
 		return OAuth2AuthorizedClientManager.builder(clientRegistrationRepository, authorizedClientRepository)
-				.providers((providers) -> providers
-						.clientCredentials((clientCredentials) -> clientCredentials
-								.accessTokenResponseClient((client) -> client
-										.requestEntityConverter((converter) -> converter
-												.defaultParameters((parameters) -> parameters.set("audience", "xyz_value"))
-										)
+				.clientCredentialsGrant((clientCredentials) -> clientCredentials
+						.accessTokenResponseClient((client) -> client
+								.requestEntityConverter((converter) -> converter
+										.defaultParameters((parameters) -> parameters.set("audience", "xyz_value"))
 								)
 						)
 				)
@@ -169,12 +165,10 @@ public class DemoOidcClientApplication {
 
 		// @formatter:off
 		return OAuth2AuthorizedClientManager.builder(clientRegistrationRepository, authorizedClientRepository)
-				.providers((providers) -> providers
-						.clientCredentials((clientCredentials) -> clientCredentials
-								.accessTokenResponseClient((client) -> client
-										.requestEntityConverter((converter) -> converter
-												.addParametersConverter(new NimbusJwtClientAuthenticationParametersConverter<>(jwkResolver()))
-										)
+				.clientCredentialsGrant((clientCredentials) -> clientCredentials
+						.accessTokenResponseClient((client) -> client
+								.requestEntityConverter((converter) -> converter
+										.addParametersConverter(new NimbusJwtClientAuthenticationParametersConverter<>(jwkResolver()))
 								)
 						)
 				)
@@ -222,12 +216,9 @@ public class DemoOidcClientApplication {
 		// @formatter:off
 		return OAuth2AuthorizedClientManager.builder(clientRegistrationRepository, authorizedClientRepository)
 				.restOperations(restTemplate)
-				.providers((providers) -> providers
-						.provider(JwtBearerOAuth2AuthorizedClientProvider.builder()
-								.accessTokenResponseClient((client) -> client
-										.restOperations(restTemplate)
-								)
-								.build()
+				.extensionGrant(JwtBearerOAuth2AuthorizedClientProvider.builder()
+						.accessTokenResponseClient((client) -> client
+								.restOperations(restTemplate)
 						)
 				)
 				.build();
@@ -318,62 +309,51 @@ public class DemoOidcClientApplication {
 
 		// @formatter:off
 		return OAuth2AuthorizedClientManager.builder(clientRegistrationRepository, authorizedClientRepository)
-				.providers((providers) -> providers
-						.authorizationCode()
-						.refreshToken((refreshToken) -> refreshToken
-								.accessTokenResponseClient((client) -> client
-										.requestEntityConverter((converter) -> converter
-												.headersConverter((request) -> new HttpHeaders()/* ... */)
-												.defaultHeaders((headers) -> headers.setAccept(List.of(MediaType.APPLICATION_JSON)))
-												.addHeadersConverter((request) -> new HttpHeaders()/* ... */)
-												.parametersConverter((request) -> new LinkedMultiValueMap<>()/* ... */)
-												.defaultParameters((parameters) -> parameters.set("audience", "xyz_value"))
-												.addParametersConverter(new NimbusJwtClientAuthenticationParametersConverter<>(jwkResolver()))
-												.build()
-										)
-										.restOperations(restTemplate)
-										.build()
+				.authorizationCodeGrant()
+				.refreshTokenGrant((refreshToken) -> refreshToken
+						.accessTokenResponseClient((client) -> client
+								.requestEntityConverter((converter) -> converter
+										.headersConverter((request) -> new HttpHeaders()/* ... */)
+										.defaultHeaders((headers) -> headers.setAccept(List.of(MediaType.APPLICATION_JSON)))
+										.addHeadersConverter((request) -> new HttpHeaders()/* ... */)
+										.parametersConverter((request) -> new LinkedMultiValueMap<>()/* ... */)
+										.defaultParameters((parameters) -> parameters.set("audience", "xyz_value"))
+										.addParametersConverter(new NimbusJwtClientAuthenticationParametersConverter<>(jwkResolver()))
 								)
-								.clock(Clock.systemUTC())
-								.clockSkew(Duration.ofMinutes(1))
-								.build()
+								.restOperations(restTemplate)
 						)
-						.clientCredentials((clientCredentials) -> clientCredentials
-								.accessTokenResponseClient((client) -> client
-										.requestEntityConverter((converter) -> converter
-												.headersConverter((request) -> new HttpHeaders()/* ... */)
-												.defaultHeaders((headers) -> headers.setAccept(List.of(MediaType.APPLICATION_JSON)))
-												.addHeadersConverter((request) -> new HttpHeaders()/* ... */)
-												.parametersConverter((request) -> new LinkedMultiValueMap<>()/* ... */)
-												.defaultParameters((parameters) -> parameters.set("audience", "xyz_value"))
-												.addParametersConverter(new NimbusJwtClientAuthenticationParametersConverter<>(jwkResolver()))
-												.build()
-										)
-										.restOperations(restTemplate)
-										.build()
+						.clock(Clock.systemUTC())
+						.clockSkew(Duration.ofMinutes(1))
+				)
+				.clientCredentialsGrant((clientCredentials) -> clientCredentials
+						.accessTokenResponseClient((client) -> client
+								.requestEntityConverter((converter) -> converter
+										.headersConverter((request) -> new HttpHeaders()/* ... */)
+										.defaultHeaders((headers) -> headers.setAccept(List.of(MediaType.APPLICATION_JSON)))
+										.addHeadersConverter((request) -> new HttpHeaders()/* ... */)
+										.parametersConverter((request) -> new LinkedMultiValueMap<>()/* ... */)
+										.defaultParameters((parameters) -> parameters.set("audience", "xyz_value"))
+										.addParametersConverter(new NimbusJwtClientAuthenticationParametersConverter<>(jwkResolver()))
 								)
-								.clock(Clock.systemUTC())
-								.clockSkew(Duration.ofMinutes(1))
-								.build()
+								.restOperations(restTemplate)
 						)
-						.provider(JwtBearerOAuth2AuthorizedClientProvider.builder()
-								.accessTokenResponseClient((client) -> client
-										.requestEntityConverter((converter) -> converter
-												.headersConverter((request) -> new HttpHeaders()/* ... */)
-												.defaultHeaders((headers) -> headers.setAccept(List.of(MediaType.APPLICATION_JSON)))
-												.addHeadersConverter((request) -> new HttpHeaders()/* ... */)
-												.parametersConverter((request) -> new LinkedMultiValueMap<>()/* ... */)
-												.defaultParameters((parameters) -> parameters.set("audience", "xyz_value"))
-												.addParametersConverter(new NimbusJwtClientAuthenticationParametersConverter<>(jwkResolver()))
-												.build()
-										)
-										.restOperations(restTemplate)
-										.build()
+						.clock(Clock.systemUTC())
+						.clockSkew(Duration.ofMinutes(1))
+				)
+				.extensionGrant(JwtBearerOAuth2AuthorizedClientProvider.builder()
+						.accessTokenResponseClient((client) -> client
+								.requestEntityConverter((converter) -> converter
+										.headersConverter((request) -> new HttpHeaders()/* ... */)
+										.defaultHeaders((headers) -> headers.setAccept(List.of(MediaType.APPLICATION_JSON)))
+										.addHeadersConverter((request) -> new HttpHeaders()/* ... */)
+										.parametersConverter((request) -> new LinkedMultiValueMap<>()/* ... */)
+										.defaultParameters((parameters) -> parameters.set("audience", "xyz_value"))
+										.addParametersConverter(new NimbusJwtClientAuthenticationParametersConverter<>(jwkResolver()))
 								)
-								.clock(Clock.systemUTC())
-								.clockSkew(Duration.ofMinutes(1))
-								.build()
+								.restOperations(restTemplate)
 						)
+						.clock(Clock.systemUTC())
+						.clockSkew(Duration.ofMinutes(1))
 				)
 				.contextAttributesMapper(contextAttributesMapper())
 				.authorizationSuccessHandler((client, principal, attributes) -> {/* ... */})
